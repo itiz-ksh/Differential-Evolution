@@ -1,86 +1,156 @@
-# PID Controller Tuning Using Differential Evolution
+# Differential Evolution Experiment Lab
 
-A local React and Python engineering application for exploring speed control of an armature-controlled DC motor. It compares a manually tuned PID controller with gains found by SciPy's Differential Evolution (DE). The objective is to reduce tracking error, overshoot and settling time without pretending that every optimized metric must improve.
+This project lets you explore how different search methods find better settings for three simulated engineering problems: controlling a DC motor, finding the best voltage for a solar panel, and controlling the temperature of a heater.
 
-## Problem and objectives
+You can change the conditions, try a setting yourself, and watch three methods compete in an **Algorithm Race**: Differential Evolution (DE), particle swarm optimization (PSO), and random search. The graphs show what each method finds and how the simulated system responds.
 
-Choose non-negative proportional, integral and derivative gains for a motor subject to a finite supply voltage and constant load torque. Simulate the physical plant, inspect current and voltage, measure the response, optimize gains and export reproducible results. This is an educational model, not a motor drive design or safety assessment.
+## The three experiments
 
-## Technology and installation
+| Experiment | What you can set | What the search tries to find |
+| --- | --- | --- |
+| **DC motor** | Motor properties, target speed, simulation time, and the range of controller settings | PID gains that bring the motor close to its target speed while balancing speed, overshoot, and error |
+| **Solar panel** | Light level and whether part of the panel is shaded | A voltage that gives the most power on the simulated curve |
+| **Temperature control** | Room temperature, target temperature, heater power, heat loss, and simulation time | PID gains that bring the heater close to its target with low error and overshoot |
 
-React, Vite, Plotly, Python, NumPy, SciPy, Matplotlib, Python `csv` and Matplotlib `PdfPages` are used. Python 3.10 or newer and Node.js are required.
+A PID controller uses three settings: **Kp** responds to the current error, **Ki** responds to error that has built up over time, and **Kd** responds to how quickly the measured value is changing. Together they determine how strongly the controller acts.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python api.py
-# In a second terminal:
-cd frontend
-npm install
-npm run dev
-```
+## How Differential Evolution works
 
-Run tests with `python -m unittest discover -s tests`. Open the Vite URL shown in the terminal (usually http://127.0.0.1:5173). Keep both terminals running. Results live in the browser session and are lost on refresh. The API is bound to localhost only.
+DE starts with a group of possible answers. For example, each answer for the motor contains three PID gains. It creates new answers by combining differences between existing ones, mixes the new values with an existing answer, and keeps the better result. It repeats these steps over several rounds, called generations.
 
-## Mathematical model
+The other methods in the race work differently: PSO moves possible answers using their own past results and the best result found by the group; random search simply tries randomly chosen settings. None of the methods is guaranteed to find the best possible answer every time.
 
-The motor has armature current `i` and angular speed `ω`:
+## Run the project
 
-- `di/dt = (V − R i − Ke ω) / L`
-- `dω/dt = (Kt i − b ω − TL) / J`
+You need Python 3.10 or newer and Node.js installed.
 
-`R` is resistance (Ω), `L` inductance (H), `Ke` back EMF constant (V s/rad), `Kt` torque constant (N m/A), `J` inertia (kg m²), `b` viscous friction (N m s/rad) and `TL` constant load torque (N m). Positive values are required for physical constants except friction, which can be zero; load torque is signed. Initial current and speed are zero. RPM is converted to rad/s for the dynamics and controller. `solve_ivp` integrates the coupled continuous states.
+1. Open a terminal in the project folder and start the Python part:
 
-## PID and numerical conventions
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   python api.py
+   ```
 
-`e = ωref − ω`, `u_raw = Kp e + Ki ∫e dt − Kd dω_filtered/dt`. Derivative on measurement avoids setpoint kick. A first-order filter with time constant 0.05 s estimates speed derivative. The applied voltage is clipped symmetrically to ± the supply limit. Back-calculation anti-windup feeds `(u − u_raw)/(0.1 Ki)` into the integrator derivative when Ki > 0; the integral is inactive when Ki = 0. Gains therefore use rad/s as the error unit. The motor has no actuator dynamics or discrete sampling model.
+2. Open a second terminal in the project folder and start the interface:
 
-Metrics use the sampled output grid: rise time is the difference between the first 10% and 90% crossings; settling is the first sample after the last sample outside the 2% band, provided the final sample is inside. This does not prove that the response remains settled beyond the time horizon. Overshoot is the non-negative excess of the maximum response relative to the positive reference. Steady-state error is the signed reference minus the **final sample**, even if unsettled. IAE is trapezoidal integral of absolute RPM error, in RPM s. Rise, settling and overshoot are undefined for a zero reference. A response that does not reach a threshold or settle is shown as not reached.
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-## Differential Evolution
+3. Open the address shown in the second terminal, usually [http://127.0.0.1:5173](http://127.0.0.1:5173). Keep both terminals running while you use the app.
 
-SciPy initializes a population, mutates candidates using population differences, crosses them over, selects lower-cost solutions, and stops on convergence or the generation limit. Population multiplier, generations, mutation, crossover, seed and gain bounds are configurable. Polishing is disabled so the displayed final value corresponds to the last actual generation. Results depend on the seed and budget; reaching the generation limit may yield a usable result with `success=False`.
+The app runs locally on your computer. Results are held in the browser and are lost when the page is refreshed.
 
-The minimized dimensionless cost is `IAE/(scale × duration) + 2 × overshoot_fraction + settling_time/duration + 2 × |final_error|/scale`, where `scale = max(reference RPM, 1)`. An unsettled response uses `2 × duration` as its settling penalty; invalid or numerically extreme responses cost 1,000,000. At zero reference relative overshoot is treated as zero in the objective. History is measured from the best candidate in each actual generation.
+## Using the app
 
-## Usage
+1. On **Dashboard**, choose DC motor, solar panel, or temperature control from the application menu.
+2. Open **Configuration** and set the conditions for that experiment. The same settings are used in the race.
+3. Open **Manual Tuning** to try your own PID gains or solar voltage and view the result.
+4. For the motor or solar panel, open **Automatic Optimization** to let DE search for a better setting. For temperature control, use the Algorithm Race to search.
+5. Open **Algorithm Race** to compare DE, PSO, and random search. Set the population size, number of generations, and random seed, then select **Calculate and play race**. Pause, step through, or replay the results.
 
-1. **Motor Configuration:** adjust the plant and voltage limit.
-2. **Manual PID Tuning:** enter gains, reference RPM and duration, then run the simulation. Defaults: 1,000 RPM, 5 s, Kp = 0.2, Ki = 1, Kd = 0, 12 V, R = 1 Ω, L = 0.05 H, Kt = Ke = 0.1, J = 0.01 and b = 0.001. Run the simulation to apply the settings. The display shows sampled speed, voltage and current and measured metrics. If voltage is insufficient for the target, the response may never settle.
-3. **Automatic Optimization:** choose gain bounds and DE settings and run the search. The final gains, measured objective, actual history, status and elapsed time are displayed and retained in browser state.
-4. **Performance Comparison:** click Run Comparison to simulate both controllers under identical current conditions; changing plant, reference or duration requires a new optimization. Changing manual gains changes the baseline. Improvement uses reduction, including absolute final error; negative values mean deterioration.
-5. **Reports and Export:** download actual recorded manual or optimized CSV data and a PDF containing configuration, gains, comparison, response and convergence. CSV exports simulate the current settings when downloaded.
+Each method in a race starts with the same randomly generated group of answers and is given the same number of evaluations. The race is calculated before playback; the time shown for each method is its full calculation time. Results can differ when you change the seed, settings, or search budget, so a single race does not prove that one method is always best.
 
-## Architecture
+## The mathematics behind the experiments
+
+These equations describe the simplified models used in the app. You can use the app without solving them, but they show what each search is trying to improve.
+
+### DC motor
+
+The motor model tracks electrical current `i` and motor speed `ω`:
 
 ```text
-frontend/src/                React interface and styling
-api.py                       Local Python JSON and export API
-app.py                       Legacy Streamlit interface
-modules/dc_motor.py          State equations and numerical integration
-modules/pid_controller.py    Filtered PID and anti-windup
-modules/performance_metrics.py  Response measurements
-modules/differential_evolution.py  Objective and SciPy optimization
-modules/visualization.py     Interactive Plotly graphs
-modules/report_generator.py  CSV and PDF generation
-utils/validation.py          Input checks
-assets/custom.css            Dashboard styling
-tests/                       Model and workflow tests
+di/dt = (V − R i − Ke ω) / L
+dω/dt = (Kt i − b ω − TL) / J
 ```
 
-## Limitations and future work
+In plain terms, the first equation describes how current changes with applied voltage and motor speed. The second describes how the resulting torque changes the motor's speed while friction and load resist it.
 
-The model is linear, with constant load and fixed parameters; it omits noise, nonlinear friction, power electronics, thermal effects, current limits and sensor dynamics. Finite sampling and horizon affect metrics. DE may be slow for large populations, long horizons or stiff parameters and may stop at a local solution. Future work could add sampled controllers, disturbance profiles, current limiting, noise and robust tuning across parameter uncertainty.
+- `V`: applied voltage; `R`: resistance; `L`: inductance
+- `Ke`: back-EMF constant; `Kt`: torque constant
+- `J`: rotational inertia; `b`: friction; `TL`: load torque
 
-## Solar maximum-power application
+The motor starts at zero speed and current. Physical constants must be positive, except friction may be zero; load torque can be positive or negative. Speed entered in RPM is converted to radians per second for the equations and controller. The equations are solved using SciPy's `solve_ivp`.
 
-Choose **Solar panel** in the application selector. Configuration sets an illustrative irradiance scale and either uniform light or simulated partial shade. Manual Tuning evaluates a chosen voltage; Automatic Optimization and DE Playground share a seeded DE search over 0–40 V, with 12 candidates per generation. The playground plots the candidates on the same power curve as they move. The search maximizes power and may converge to a local peak, especially under shade.
+The motor controller calculates its requested voltage as:
 
-The curve is a synthetic educational function, not a physical photovoltaic, bypass-diode, or measured panel model. Irradiance scales its power linearly; the shade setting changes its shape. Solar calculations run in the browser and do not affect motor settings. Run frontend tests with `node --test frontend/tests/*.test.js`.
+```text
+e = ωref − ω
+u_raw = Kp e + Ki ∫e dt − Kd dω_filtered/dt
+```
 
-## Experiment race and temperature control
+Here, `e` is the difference between target and actual speed. The derivative uses measured speed, with a filter time constant of 0.05 seconds, to reduce a sudden kick when the target changes. The applied voltage `u` is limited to the positive or negative supply voltage. When `Ki > 0`, the controller adjusts the integral using `(u − u_raw)/(0.1 Ki)` to reduce the buildup of error while voltage is limited; the integral is inactive when `Ki = 0`.
 
-Select DC motor, solar panel, or temperature control on the dashboard. The Algorithm Race compares Differential Evolution (DE/rand/1/bin), particle swarm optimization, and random search using the current application settings, the same seeded starting population, and the same number of objective evaluations per method. The search is computed before playback; the plotted score is the best seen through the selected generation, and the displayed elapsed time measures the full search for each method. The motor uses the configured PID gain bounds and existing motor objective. Solar searches 0–40 V on the same illustrative curve used by the solar page and maximizes power; it is not a photovoltaic device model. 
+For motor tuning, a lower score is better:
 
-Temperature control simulates a single thermal mass starting at ambient, with heat loss proportional to its temperature above ambient and heater power limited between zero and the configured maximum. A sampled PID controller is evaluated using normalized mean absolute error plus twice normalized overshoot and twice normalized final error. The race searches Kp in [0,10], Ki in [0,1], and Kd in [0,10]. The simplified model excludes sensor lag, variable ambient conditions, and heater safety mechanisms. A target above ambient can still be unreachable if maximum power is insufficient to offset heat loss.
+```text
+score = IAE / (scale × duration)
+      + 2 × overshoot_fraction
+      + settling_time / duration
+      + 2 × |final_error| / scale
+scale = max(target speed in RPM, 1)
+```
+
+`IAE` is the accumulated absolute speed error. Overshoot measures how far the speed goes above the target; settling time measures how long it takes to stay close to the target within the simulated period. If the response does not settle, the calculation uses twice the simulation duration as a penalty. Invalid or numerically extreme responses receive a score of 1,000,000. At a zero target, relative overshoot contributes zero to the score.
+
+The displayed measurements use sampled results: rise time is the difference between the first 10% and 90% crossings; settling is the first sample after the final sample outside the 2% band, provided the last sample is inside it. The finite simulation cannot prove that the response stays settled afterward. Overshoot is the non-negative excess above a positive target; final error is target minus the final speed sample. IAE is calculated from absolute RPM error over time. Rise, settling, and relative overshoot are undefined for a zero target; unreachable thresholds are shown as not reached.
+
+The motor's separate Automatic Optimization page uses SciPy's DE with adjustable gain ranges, population multiplier, maximum generations, mutation, crossover, and seed. Its extra polishing step is disabled, so the displayed history represents actual DE generations. Reaching the generation limit can still produce a useful answer even when the status says it has not converged.
+
+### Solar panel
+
+The solar example uses a made-up power curve to make the search visible. For voltage `v` between 0 and 40 V:
+
+```text
+envelope = v × (40 − v) / 400
+power = envelope × shape × irradiance / 1000
+```
+
+For uniform light, `shape = 120`. For simulated partial shade:
+
+```text
+shape = 75 × exp(−((v − 12) / 4)²)
+      + 115 × exp(−((v − 30) / 4.5)²) + 12
+```
+
+The shaded curve has multiple peaks, so a search can find a good peak without finding the highest one. Higher irradiance scales the curve upward. This is an illustrative mathematical curve, not a model or measurement of a real panel.
+
+### Temperature control
+
+The heater model starts at the surrounding temperature. Heater power adds heat, while heat escapes faster as the heater gets warmer than its surroundings:
+
+```text
+C × dT/dt = heater_power − H × (T − T_ambient)
+```
+
+`T` is temperature, `T_ambient` is room temperature, `C` is heat capacity, and `H` is the heat lost per degree above room temperature. Heater power is limited between zero and the configured maximum. A PID controller adjusts this power over time.
+
+For the temperature race, a lower score is better:
+
+```text
+score = mean_absolute_error / temperature_gap
+      + 2 × overshoot / temperature_gap
+      + 2 × |final_error| / temperature_gap
+temperature_gap = target_temperature − ambient_temperature
+```
+
+The race searches Kp from 0 to 10, Ki from 0 to 1, and Kd from 0 to 10. The target must be above ambient temperature, but it can still be unreachable if the heater cannot overcome the heat loss.
+
+## Limits of the simulations
+
+These examples are for learning, not for designing or operating real equipment. The motor model leaves out effects such as sensor noise, current limits, and power electronics. The solar curve is illustrative. The heater model does not include sensor delays, changing room temperature, or real heater safety controls. Results are also affected by how long each simulation runs and how many settings the search is allowed to try.
+
+## Running the tests
+
+From the project folder, with the Python environment active:
+
+```bash
+python -m unittest discover -s tests
+node --test frontend/tests/*.test.js
+```
+
+The interface uses React, Vite, and Plotly. Python, NumPy, SciPy, and Matplotlib support the simulations and the existing reporting tools.
