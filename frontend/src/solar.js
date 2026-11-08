@@ -1,0 +1,6 @@
+// Illustrative power curve, not a photovoltaic electrical model.
+export function power(voltage,shade,irradiance=1000){const v=Math.max(0,Math.min(40,voltage));const envelope=v*(40-v)/400;const shape=shade?(75*Math.exp(-(((v-12)/4)**2))+115*Math.exp(-(((v-30)/4.5)**2))+12):120;return envelope*shape*irradiance/1000}
+function random(s){s.rng=(Math.imul(1664525,s.rng)+1013904223)>>>0;return s.rng/4294967296}
+function point(s,voltage){return {voltage,power:power(voltage,s.shade,s.irradiance)}}
+export function createSolarSearch(shade,seed=42,irradiance=1000,mutation=.7){const s={shade,irradiance,mutation,rng:seed>>>0,points:[],history:[],generation:0,evaluations:0};for(let i=0;i<12;i++)s.points.push(point(s,random(s)*40));s.evaluations=12;s.best=s.points.reduce((a,b)=>a.power>b.power?a:b);s.history.push(s.best.power);return s}
+export function stepSolarSearch(s){const old=s.points;s.points=old.map((p,i)=>{const ids=[];while(ids.length<3){const n=Math.floor(random(s)*old.length);if(n!==i&&!ids.includes(n))ids.push(n)}const [a,b,c]=ids.map(n=>old[n]);const trial=point(s,Math.max(0,Math.min(40,a.voltage+s.mutation*(b.voltage-c.voltage))));return trial.power>=p.power?trial:p});s.evaluations+=old.length;s.generation++;const best=s.points.reduce((a,b)=>a.power>b.power?a:b);if(best.power>s.best.power)s.best=best;s.history.push(s.best.power);return s}
